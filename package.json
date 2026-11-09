@@ -1,6 +1,6 @@
 {
   "name": "@deplite/run-action",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Run a Deplite workflow from GitHub Actions.",
   "license": "Apache-2.0",

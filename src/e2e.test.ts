@@ -501,6 +501,34 @@ test('409 error codes become Korean action errors', async (t) => {
   }
 });
 
+test('workflow_invalid errors include the device reason without internal message text', async (t) => {
+  const server = await startMockServer((_req, res) => {
+    sendJson(res, 409, {
+      statusCode: 409,
+      error: 'Conflict',
+      message: 'Workflow "hello" is invalid: internal text',
+      reason: 'workflow "hello": name is defined in 2 files (hello.yml, team/hello.yml)',
+      invalidCode: 'duplicate_name',
+      code: 'workflow_invalid',
+    });
+  });
+  if (!server) return t.skip('Local mock server sockets are blocked by the current sandbox.');
+  try {
+    const result = await runAction({
+      'api-token': 'tkn_test',
+      agent: 'edge',
+      workflow: 'hello',
+      'base-url': 'http://127.0.0.1:' + server.port + '/v1',
+    });
+    assert.equal(result.code, 1);
+    assert.match(result.stdout, /HTTP 409, workflow_invalid/);
+    assert.match(result.stdout, /team\/hello\.yml/);
+    assert.doesNotMatch(result.stdout, /is invalid:/);
+  } finally {
+    await server.close();
+  }
+});
+
 test('approval lookup uses the returned agent ID and sends a valid HMAC approval', async (t) => {
   const secret = Buffer.alloc(32, 0x05).toString('base64');
   let approvalBody: Record<string, unknown> | undefined;

@@ -176,6 +176,70 @@ test('error code messages include known Korean guidance and unknown HTTP details
   );
 });
 
+test('workflow_invalid explains duplicate names and appends the sanitized device reason', () => {
+  const message = getApiErrorMessage(409, {
+    code: 'workflow_invalid',
+    invalidCode: 'duplicate_name',
+    reason: 'workflow "hello": name is defined in 2 files (hello.yml, team/hello.yml)',
+    message: 'Workflow "hello" is invalid: internal text',
+  });
+  assert.match(message, /같은 이름의 워크플로우 파일이 기기에 여러 개/);
+  assert.match(message, /사유: workflow "hello": name is defined in 2 files \(hello\.yml, team\/hello\.yml\)$/);
+  assert.doesNotMatch(message, /internal text|is invalid:/);
+});
+
+test('workflow_invalid uses general guidance for unknown codes and absent reasons', () => {
+  const unknownCode = getApiErrorMessage(409, {
+    code: 'workflow_invalid',
+    invalidCode: 'future_reason',
+    reason: 'reported by device',
+  });
+  assert.match(unknownCode, /기기가 이 워크플로우를 무효로 보고해 실행할 수 없습니다/);
+  assert.match(unknownCode, /사유: reported by device$/);
+
+  const noReason = getApiErrorMessage(409, {
+    code: 'workflow_invalid',
+    invalidCode: 'duplicate_name',
+  });
+  assert.match(noReason, /같은 이름의 워크플로우 파일이 기기에 여러 개/);
+  assert.doesNotMatch(noReason, /사유:/);
+});
+
+test('workflow_invalid sanitizes controls and truncates reasons by code point', () => {
+  const unsafeReason = getApiErrorMessage(409, {
+    code: 'workflow_invalid',
+    reason: ' first\n::error::x\tsecond  part ',
+  });
+  assert.match(unsafeReason, /사유: first ::error::x second part$/);
+  assert.doesNotMatch(unsafeReason, /\n|\t/);
+
+  const longReason = 'a'.repeat(499) + '😀' + 'tail';
+  const truncated = getApiErrorMessage(409, {
+    code: 'workflow_invalid',
+    reason: longReason,
+  });
+  const displayedReason = truncated.slice(truncated.indexOf('사유: ') + '사유: '.length);
+  assert.equal(Array.from(displayedReason).length, 501);
+  assert.equal(Array.from(displayedReason).at(-1), '…');
+  assert.equal(Array.from(displayedReason).slice(0, 500).join(''), 'a'.repeat(499) + '😀');
+});
+
+test('workflow_invalid ignores non-string reasons and reason fields for other codes', () => {
+  const nonStringReason = getApiErrorMessage(409, {
+    code: 'workflow_invalid',
+    reason: { detail: 'not a string' },
+  });
+  assert.doesNotMatch(nonStringReason, /사유:/);
+
+  const otherCode = getApiErrorMessage(409, {
+    code: 'idempotency_conflict',
+    reason: 'must be ignored',
+    invalidCode: 'duplicate_name',
+  });
+  assert.match(otherCode, /멱등 키/);
+  assert.doesNotMatch(otherCode, /must be ignored|같은 이름의 워크플로우/);
+});
+
 test('parsePositiveInteger accepts positive values and rejects malformed values', () => {
   assert.equal(parsePositiveInteger('60', 'wait-timeout-minutes'), 60);
   assert.throws(() => parsePositiveInteger('0', 'wait-timeout-minutes'));

@@ -48621,6 +48621,7 @@ const ERROR_MESSAGES = {
     ref_not_allowed: '지정한 ref가 워크플로우에서 허용되지 않습니다.',
     ref_blocked: '지정한 ref가 콘솔의 실행 제한에 의해 차단되었습니다.',
     invalid_params: 'params가 워크플로우 입력 규격과 맞지 않습니다.',
+    workflow_invalid: '기기가 이 워크플로우를 무효로 보고해 실행할 수 없습니다.',
     invalid_approval: '승인 정보의 형식이 올바르지 않습니다.',
     approval_required: '이 워크플로우는 승인이 필요합니다.',
     approval_method_not_allowed: '이 워크플로우에서 허용하지 않는 승인 방식입니다.',
@@ -48838,6 +48839,24 @@ async function requestJson(url, init, context, deadline) {
     return body;
 }
 function getApiErrorMessage(status, body) {
+    if (body.code === 'workflow_invalid') {
+        const invalidCode = typeof body.invalidCode === 'string' ? body.invalidCode : undefined;
+        const guidance = invalidCode === 'duplicate_name'
+            ? '같은 이름의 워크플로우 파일이 기기에 여러 개 있어 실행할 수 없습니다. 파일을 하나만 남겨주세요.'
+            : ERROR_MESSAGES.workflow_invalid;
+        const reason = typeof body.reason === 'string'
+            ? Array.from(body.reason
+                .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim())
+            : [];
+        const safeReason = reason.length > 500 ? reason.slice(0, 500).join('') + '…' : reason.join('');
+        return ('Deplite 요청 실패 (HTTP ' +
+            status +
+            ', workflow_invalid): ' +
+            guidance +
+            (safeReason ? ' 사유: ' + safeReason : ''));
+    }
     const known = body.code ? ERROR_MESSAGES[body.code] : undefined;
     if (known)
         return 'Deplite 요청 실패 (HTTP ' + status + ', ' + body.code + '): ' + known;
